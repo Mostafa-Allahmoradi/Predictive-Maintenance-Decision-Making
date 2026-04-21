@@ -161,7 +161,7 @@ class PrioritizedReplayBuffer:
 
 
 class MLP(nn.Module):
-    def __init__(self, input_dim: int, output_dim: int, hidden_dim: int = 128) -> None:
+    def __init__(self, input_dim: int, output_dim: int, hidden_dim: int = 256) -> None:
         super().__init__()
         self.network = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
@@ -187,20 +187,20 @@ class DoubleDQNAgent:
         lr_end_factor: float = 0.05,    # decay LR to 5 % of initial over lr_decay_steps
         lr_decay_steps: int = 50_000,
         epsilon_start: float = 1.0,
-        epsilon_end: float = 0.05,
-        epsilon_decay: float = 0.995,
-        batch_size: int = 256,          # larger batch saturates GPU for small state dim
-        buffer_capacity: int = 20_000,
-        target_sync_interval: int = 100,
-        hidden_dim: int = 128,
-        max_grad_norm: float = 10.0,
+        epsilon_end: float = 0.02,          # lower floor → finer exploitation
+        epsilon_decay: float = 0.99995,     # reaches floor at ~78k steps (~500 ep × 200 avg cycles)
+        batch_size: int = 256,              # larger batch saturates GPU for small state dim
+        buffer_capacity: int = 100_000,     # stores ~500 full engine runs; retains rare failures longer
+        target_sync_interval: int = 200,    # more stable with larger network and −100 penalty scale
+        hidden_dim: int = 256,             # more capacity for 22-dim state → 2-action mapping
+        max_grad_norm: float = 5.0,        # tighter clipping for double-width hidden layers
         # --- PER hyper-parameters ---
         per_alpha: float = 0.6,
         per_beta_start: float = 0.4,
         per_beta_end: float = 1.0,
-        per_beta_anneal_steps: int = 100_000,
+        per_beta_anneal_steps: int = 200_000,   # anneal β over full training run
         per_failure_boost: float = 5.0,
-        per_failure_rul_threshold: int = 20,
+        per_failure_rul_threshold: int = 30,    # wider near-failure zone for boosted sampling
     ) -> None:
         self.state_dim = state_dim
         self.action_dim = action_dim
@@ -213,6 +213,7 @@ class DoubleDQNAgent:
         self.target_sync_interval = target_sync_interval
         self.max_grad_norm = max_grad_norm
         self.learn_step = 0
+        self.hidden_dim = hidden_dim  # stored so subclasses can match capacity
 
         self.online_network = MLP(state_dim, action_dim, hidden_dim).to(self.device)
         self.target_network = MLP(state_dim, action_dim, hidden_dim).to(self.device)
@@ -349,13 +350,14 @@ class DynaQAgent(DoubleDQNAgent):
         state_dim: int,
         action_dim: int,
         device: str,
-        planning_steps: int = 50,
-        world_model_learning_rate: float = 1e-3,
+        planning_steps: int = 100,           # 100 simulated steps per real step
+        world_model_learning_rate: float = 3e-4,  # matched to Q-network LR for stable joint training
         **kwargs,
     ) -> None:
         super().__init__(state_dim=state_dim, action_dim=action_dim, device=device, **kwargs)
         self.planning_steps = planning_steps
-        self.world_model = MLP(state_dim + action_dim, state_dim).to(self.device)
+        # Match hidden width of Q-networks so world model has equal representational capacity.
+        self.world_model = MLP(state_dim + action_dim, state_dim, hidden_dim=self.hidden_dim).to(self.device)
         self.world_model_optimizer = optim.Adam(self.world_model.parameters(), lr=world_model_learning_rate)
 
     def save_checkpoint(self, path: str | Path) -> None:

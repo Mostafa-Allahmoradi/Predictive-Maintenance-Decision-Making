@@ -177,7 +177,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--data-dir", type=Path, default=Path("data"), help="Directory containing CMAPSS text files.")
     parser.add_argument("--subset", type=str, default="FD001", help="CMAPSS subset identifier.")
     parser.add_argument("--window-size", type=int, default=30, help="Sliding window size for state construction.")
-    parser.add_argument("--episodes", type=int, default=150, help="Training episodes per agent.")
+    parser.add_argument("--episodes", type=int, default=500, help="Training episodes per agent.")
     parser.add_argument("--fixed-interval", type=int, default=150, help="Baseline maintenance interval in cycles.")
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")
     parser.add_argument("--output-dir", type=Path, default=Path("artifacts"), help="Output directory for metrics and plots.")
@@ -205,8 +205,8 @@ def main() -> None:
         raise RuntimeError("Evaluation split is empty. Add more engines or reduce the validation fraction.")
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    # Estimated learn-steps budget: episodes * avg engine life (~200 cycles).
-    lr_decay_steps = args.episodes * 200
+    # Estimated learn-steps budget: episodes * avg engine life (~250 cycles).
+    lr_decay_steps = args.episodes * 250
 
     double_dqn_factory = lambda state_dim, action_dim, runtime_device: DoubleDQNAgent(
         state_dim=state_dim,
@@ -220,7 +220,7 @@ def main() -> None:
         state_dim=state_dim,
         action_dim=action_dim,
         device=runtime_device,
-        planning_steps=50,
+        planning_steps=100,
         batch_size=256,
         learning_rate=3e-4,
         lr_decay_steps=lr_decay_steps,
