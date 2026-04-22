@@ -11,9 +11,11 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from pdm.agents import DoubleDQNAgent, DynaQAgent, Transition
+from pdm.ddqn_agent import DoubleDQNAgent, Transition
+from pdm.dyna_agent import DynaQAgent
 from pdm.data import CMAPSSPreprocessor, EngineEpisode, split_episodes
 from pdm.env import TurboFanEnv
+from pdm import config as CFG
 
 
 def train_agent(
@@ -175,11 +177,11 @@ def save_cost_plot(cost_df: pd.DataFrame, output_dir: Path) -> None:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train RL agents for turbofan predictive maintenance.")
     parser.add_argument("--data-dir", type=Path, default=Path("data"), help="Directory containing CMAPSS text files.")
-    parser.add_argument("--subset", type=str, default="FD001", help="CMAPSS subset identifier.")
-    parser.add_argument("--window-size", type=int, default=30, help="Sliding window size for state construction.")
-    parser.add_argument("--episodes", type=int, default=500, help="Training episodes per agent.")
-    parser.add_argument("--fixed-interval", type=int, default=150, help="Baseline maintenance interval in cycles.")
-    parser.add_argument("--seed", type=int, default=42, help="Random seed.")
+    parser.add_argument("--subset", type=str, default=CFG.DATA_SUBSET, help="CMAPSS subset identifier.")
+    parser.add_argument("--window-size", type=int, default=CFG.DATA_WINDOW_SIZE, help="Sliding window size for state construction.")
+    parser.add_argument("--episodes", type=int, default=CFG.TRAIN_NUM_EPISODES, help="Training episodes per agent.")
+    parser.add_argument("--fixed-interval", type=int, default=CFG.TRAIN_FIXED_INTERVAL, help="Baseline maintenance interval in cycles.")
+    parser.add_argument("--seed", type=int, default=CFG.TRAIN_SEED, help="Random seed.")
     parser.add_argument("--output-dir", type=Path, default=Path("artifacts"), help="Output directory for metrics and plots.")
     parser.add_argument("--tensorboard-dir", type=Path, default=Path("runs"), help="Root directory for TensorBoard event files.")
     return parser.parse_args()
@@ -212,17 +214,17 @@ def main() -> None:
         state_dim=state_dim,
         action_dim=action_dim,
         device=runtime_device,
-        batch_size=256,
-        learning_rate=3e-4,
+        batch_size=CFG.DDQN_BATCH_SIZE,
+        learning_rate=CFG.DDQN_LEARNING_RATE,
         lr_decay_steps=lr_decay_steps,
     )
     dyna_q_factory = lambda state_dim, action_dim, runtime_device: DynaQAgent(
         state_dim=state_dim,
         action_dim=action_dim,
         device=runtime_device,
-        planning_steps=100,
-        batch_size=256,
-        learning_rate=3e-4,
+        planning_steps=CFG.DYNAQ_PLANNING_STEPS,
+        batch_size=CFG.DDQN_BATCH_SIZE,
+        learning_rate=CFG.DDQN_LEARNING_RATE,
         lr_decay_steps=lr_decay_steps,
     )
 

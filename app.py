@@ -15,6 +15,7 @@ Keyboard shortcuts during demo
 
 from __future__ import annotations
 
+import math
 import time
 from pathlib import Path
 
@@ -23,7 +24,7 @@ import plotly.graph_objects as go
 import streamlit as st
 import torch
 
-from pdm.agents import DoubleDQNAgent
+from pdm.ddqn_agent import DoubleDQNAgent
 from pdm.data import CMAPSSPreprocessor, EngineEpisode
 
 # ── Configuration ─────────────────────────────────────────────────────────────
@@ -31,12 +32,15 @@ from pdm.data import CMAPSSPreprocessor, EngineEpisode
 DATA_DIR = Path("data")
 ARTIFACTS_DIR = Path("artifacts")
 
-# CMAPSS sensor index → physical name (state vector layout: sensor_1..21, cycle)
+# CMAPSS sensor index → physical name
+# State vector layout after dead-sensor removal (16 dims):
+#   [s2, s3, s4, s6, s7, s8, s9, s11..s15, s17, s20, s21, cycle]
+#   indices: 0   1   2   3   4   5   6   7..11  12   13   14   15
 CRITICAL_SENSORS: dict[str, int] = {
-    "T24 · LPC outlet temp": 1,
-    "T30 · HPC outlet temp": 2,
-    "T50 · LPT outlet temp": 3,
-    "P30 · HPC pressure":    6,
+    "T24 · LPC outlet temp": 0,   # sensor_2
+    "T30 · HPC outlet temp": 1,   # sensor_3
+    "T50 · LPT outlet temp": 2,   # sensor_4
+    "P30 · HPC pressure":    4,   # sensor_7
 }
 SENSOR_COLORS = ["#00b4d8", "#f77f00", "#2dc653", "#e8c400"]
 SENSOR_TAIL = 60  # cycles to show in the live sensor window
@@ -44,7 +48,9 @@ SENSOR_TAIL = 60  # cycles to show in the live sensor window
 SCHEDULED_MAINTENANCE_COST: float = -20.0
 SAFE_CYCLE_REWARD: float = 1.0
 CATASTROPHIC_FAILURE_PENALTY: float = -100.0
-FAILURE_RUL_WARNING: int = 50   # highlight threshold on the RUL gauge
+PROXIMITY_PENALTY_THRESHOLD: int = 20   # must match TurboFanEnv default
+PROXIMITY_PENALTY_SCALE: float = 2.0    # must match TurboFanEnv default
+FAILURE_RUL_WARNING: int = 50           # highlight threshold on the RUL gauge
 
 CHECKPOINTS: dict[str, Path] = {
     "Double DQN": ARTIFACTS_DIR / "checkpoint_DoubleDQN.pt",
@@ -150,6 +156,20 @@ def _get_q_values(agent: DoubleDQNAgent | None, state: np.ndarray) -> tuple[floa
     return float(q[0]), float(q[1])
 
 
+def _get_q_entropy(q_stay: float, q_maintain: float) -> tuple[float, float, float]:
+    """Compute softmax probabilities and Shannon entropy over the two Q-values.
+
+    Returns (p_stay, p_maintain, entropy).
+    Entropy H ∈ [0, ln(2)≈0.693]: 0 = fully certain, ln(2) = maximally uncertain.
+    """
+    qs_arr = np.array([q_stay, q_maintain], dtype=np.float64)
+    qs_arr -= qs_arr.max()          # numerical stability
+    exp_q = np.exp(qs_arr)
+    probs = exp_q / exp_q.sum()
+    h = float(-np.sum(probs * np.log(probs + 1e-12)))
+    return float(probs[0]), float(probs[1]), h
+
+
 # ── Environment step (mirrors TurboFanEnv.step exactly) ──────────────────────
 
 def _env_step(episode: EngineEpisode, step_idx: int, action: int) -> dict:
@@ -168,6 +188,12 @@ def _env_step(episode: EngineEpisode, step_idx: int, action: int) -> dict:
         event = "catastrophic_failure"
     else:
         reward = SAFE_CYCLE_REWARD
+        if 0 < current_rul < PROXIMITY_PENALTY_THRESHOLD:
+            reward -= (
+                PROXIMITY_PENALTY_SCALE
+                * (PROXIMITY_PENALTY_THRESHOLD - current_rul)
+                / PROXIMITY_PENALTY_THRESHOLD
+            )
         next_idx = step_idx + 1
         if next_idx >= len(episode.states):
             terminated = True
@@ -196,6 +222,8 @@ def _blank_history() -> dict:
         **{f"sensor_{name}": [] for name in CRITICAL_SENSORS},
         "q_stay": [],
         "q_maintain": [],
+        "entropy": [],
+        "p_maintain": [],
         "reward": [],
         "event": [],
         "action": [],
@@ -261,13 +289,17 @@ def _qvalue_chart(q_stay: float, q_maintain: float, policy: str) -> go.Figure:
     consider_maint = q_maintain > q_stay
 
     if policy in ("Double DQN", "Dyna-Q"):
+        p_stay, p_maint, _ = _get_q_entropy(q_stay, q_maintain)
         labels = ["Continue (a=0)", "Maintain (a=1)"]
         values = [q_stay, q_maintain]
         colors = [
             "#2dc653" if not consider_maint else "#3d4f43",
             "#e63946" if consider_maint else "#4f3d3d",
         ]
-        text_vals = [f"{q_stay:.4f}", f"{q_maintain:.4f}"]
+        text_vals = [
+            f"Q={q_stay:.3f}  ({p_stay*100:.0f}%)",
+            f"Q={q_maintain:.3f}  ({p_maint*100:.0f}%)",
+        ]
         x_title = "Q-value"
         title = "🧠 Agent Q-Values  [Stay vs. Maintain]"
     else:
@@ -564,8 +596,11 @@ if ss.playing and not ss.done:
     for _name, _idx in CRITICAL_SENSORS.items():
         h[f"sensor_{_name}"].append(float(_state[_idx]))
     _qs, _qm = _get_q_values(active_agent, _state)
+    _p_stay, _p_maint, _entropy = _get_q_entropy(_qs, _qm)
     h["q_stay"].append(_qs)
     h["q_maintain"].append(_qm)
+    h["entropy"].append(_entropy)
+    h["p_maintain"].append(_p_maint)
     h["reward"].append(_result["reward"])
     h["event"].append(_result["event"])
     h["action"].append(_action)
@@ -647,10 +682,20 @@ with r1_right:
             st.caption("⚠️ Untrained agent — actions are random.")
         else:
             action_label = "**MAINTAIN**" if cur_action == 1 else "**Continue**"
-            confidence = abs(cur_qm - cur_qs)
+            _p_stay_r, _p_maint_r, _entropy_r = _get_q_entropy(cur_qs, cur_qm)
+            _max_entropy = math.log(2)  # ln(2) for 2 actions
+            _certainty = 1.0 - _entropy_r / _max_entropy
+            certainty_label = (
+                "HIGH" if _certainty > 0.7 else ("LOW" if _certainty < 0.3 else "MEDIUM")
+            )
             st.caption(
-                f"Decision this step: {action_label} &nbsp;|&nbsp; "
-                f"Confidence margin: `{confidence:.4f}`"
+                f"Decision: {action_label} &nbsp;|&nbsp; "
+                f"p(Maintain) = **{_p_maint_r*100:.1f}%** &nbsp;|&nbsp; "
+                f"Entropy H = `{_entropy_r:.4f}` nat"
+            )
+            st.progress(
+                float(_certainty),
+                text=f"Agent Certainty: {certainty_label} ({_certainty*100:.0f}%)",
             )
     elif selected_policy == "Fixed-Interval":
         st.plotly_chart(

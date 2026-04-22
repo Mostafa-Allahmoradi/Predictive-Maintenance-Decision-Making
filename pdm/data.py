@@ -19,6 +19,21 @@ RAW_COLUMNS = [
 RAW_COLUMNS += [f"sensor_{index}" for index in range(1, 22)]
 SENSOR_COLUMNS = [f"sensor_{index}" for index in range(1, 22)]
 
+# Sensors with zero variance in all FD001 operating conditions — they carry no
+# information and add spurious input dimensions to the Q-network.
+# Dropping them reduces the state dimension from 22 → 16 and accelerates convergence.
+DEAD_SENSOR_COLUMNS: list[str] = [
+    "sensor_1",   # Tf  — constant across FD001
+    "sensor_5",   # Nf  — constant across FD001
+    "sensor_10",  # NRf — constant across FD001
+    "sensor_16",  # PCNfRdmd — constant across FD001
+    "sensor_18",  # W31 — constant across FD001
+    "sensor_19",  # W32 — constant across FD001
+]
+ACTIVE_SENSOR_COLUMNS: list[str] = [
+    col for col in SENSOR_COLUMNS if col not in set(DEAD_SENSOR_COLUMNS)
+]
+
 
 @dataclass(slots=True)
 class EngineEpisode:
@@ -71,9 +86,11 @@ class CMAPSSPreprocessor:
     ) -> Tuple[pd.DataFrame, pd.DataFrame]:
         train_df = train_df.copy()
         test_df = test_df.copy()
-        self.scaler.fit(train_df[SENSOR_COLUMNS])
-        train_df.loc[:, SENSOR_COLUMNS] = self.scaler.transform(train_df[SENSOR_COLUMNS])
-        test_df.loc[:, SENSOR_COLUMNS] = self.scaler.transform(test_df[SENSOR_COLUMNS])
+        # Scaler is fitted on training data only — prevents data leakage.
+        # Dead-sensor columns are excluded so the scaler never sees zero-variance features.
+        self.scaler.fit(train_df[ACTIVE_SENSOR_COLUMNS])
+        train_df.loc[:, ACTIVE_SENSOR_COLUMNS] = self.scaler.transform(train_df[ACTIVE_SENSOR_COLUMNS])
+        test_df.loc[:, ACTIVE_SENSOR_COLUMNS] = self.scaler.transform(test_df[ACTIVE_SENSOR_COLUMNS])
         return train_df, test_df
 
     def build_episodes(self, train_df: pd.DataFrame) -> Dict[int, EngineEpisode]:
@@ -84,7 +101,7 @@ class CMAPSSPreprocessor:
                 continue
 
             sensor_roll = (
-                engine_df[SENSOR_COLUMNS]
+                engine_df[ACTIVE_SENSOR_COLUMNS]
                 .rolling(window=self.window_size, min_periods=self.window_size)
                 .mean()
                 .iloc[self.window_size - 1 :]
@@ -109,7 +126,7 @@ class CMAPSSPreprocessor:
             if len(engine_df) < self.window_size:
                 continue
 
-            sensor_values = engine_df[SENSOR_COLUMNS].to_numpy(dtype=np.float32)
+            sensor_values = engine_df[ACTIVE_SENSOR_COLUMNS].to_numpy(dtype=np.float32)
             rul_values = engine_df["RUL"].to_numpy(dtype=np.int64)
             for start_index in range(len(engine_df) - self.window_size + 1):
                 end_index = start_index + self.window_size

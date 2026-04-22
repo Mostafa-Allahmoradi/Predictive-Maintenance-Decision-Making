@@ -46,15 +46,16 @@ import numpy as np
 import pandas as pd
 import torch
 
-from pdm.agents import DoubleDQNAgent
+from pdm.ddqn_agent import DoubleDQNAgent
 from pdm.data import CMAPSSPreprocessor, split_episodes
 from pdm.env import TurboFanEnv
+from pdm import config as CFG
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Economic constants (must match TurboFanEnv defaults)
+# Economic constants (read from .env via pdm.config; must match TurboFanEnv)
 # ──────────────────────────────────────────────────────────────────────────────
-MAINTENANCE_UNIT_COST: float = 20.0
-FAILURE_UNIT_COST: float = 100.0
+MAINTENANCE_UNIT_COST: float = CFG.COST_MAINTENANCE_UNIT
+FAILURE_UNIT_COST:     float = CFG.COST_FAILURE_UNIT
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -433,8 +434,8 @@ def parse_args() -> argparse.Namespace:
         description="Evaluate predictive maintenance policies: TCO, P(maint|RUL), FDR."
     )
     p.add_argument("--data-dir", type=Path, default=Path("data"), help="Directory with CMAPSS .txt files.")
-    p.add_argument("--subset", default="FD001", help="CMAPSS subset, e.g. FD001.")
-    p.add_argument("--window-size", type=int, default=30, help="Sliding-window size used during training.")
+    p.add_argument("--subset", default=CFG.DATA_SUBSET, help="CMAPSS subset, e.g. FD001.")
+    p.add_argument("--window-size", type=int, default=CFG.DATA_WINDOW_SIZE, help="Sliding-window size used during training.")
     p.add_argument(
         "--artifacts-dir",
         type=Path,
@@ -442,9 +443,9 @@ def parse_args() -> argparse.Namespace:
         help="Directory containing checkpoint_DoubleDQN.pt (produced by train_compare.py).",
     )
     p.add_argument("--output-dir", type=Path, default=Path("artifacts"), help="Where to write output files.")
-    p.add_argument("--fixed-interval", type=int, default=150, help="Fixed-interval maintenance cycle count.")
-    p.add_argument("--fdr-threshold", type=int, default=50, help="RUL threshold for FDR calculation.")
-    p.add_argument("--seed", type=int, default=42, help="Random seed for data split and rollout.")
+    p.add_argument("--fixed-interval", type=int, default=CFG.EVAL_FIXED_INTERVAL, help="Fixed-interval maintenance cycle count.")
+    p.add_argument("--fdr-threshold", type=int, default=CFG.EVAL_FDR_THRESHOLD, help="RUL threshold for FDR calculation.")
+    p.add_argument("--seed", type=int, default=CFG.EVAL_SEED, help="Random seed for data split and rollout.")
     return p.parse_args()
 
 
