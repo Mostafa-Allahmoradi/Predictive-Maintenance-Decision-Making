@@ -111,7 +111,7 @@ class PrioritizedReplayBuffer:
     Importance-sampling (IS) weights correct for the resulting bias:
 
         P(i) = p_i^alpha / sum_k p_k^alpha   (sampling probability)
-        w_i  = (N * P(i))^{-beta}             (IS weight, normalised by max)
+        w_i  = (N * P(i))^{-beta}             (IS weight, normalized by max)
 
     beta is annealed from beta_start to 1.0 over beta_anneal_steps,
     progressively removing the IS bias as training stabilises.

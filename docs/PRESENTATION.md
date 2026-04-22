@@ -177,7 +177,7 @@ Raw CMAPSS                      Agent State
 ```
 
 ### Speaker Notes
-"There are two deliberate design choices here. First, scaling is fitted only on training data — fitting on the full dataset would leak test-time distributional information into the scaler. Second, the cycle count is intentionally left unscaled. It serves as an absolute temporal anchor. If we normalised it, the agent would lose information about whether it is at cycle 50 or cycle 300."
+"There are two deliberate design choices here. First, scaling is fitted only on training data — fitting on the full dataset would leak test-time distributional information into the scaler. Second, the cycle count is intentionally left unscaled. It serves as an absolute temporal anchor. If we normalized it, the agent would lose information about whether it is at cycle 50 or cycle 300."
 
 ### AI Slide Prompt
 > Vertical pipeline diagram slide titled "Preprocessing Pipeline". Show 5 process boxes connected by downward arrows: (1) "Raw CSV: 21 sensors + 3 op settings" → (2) "RUL label: RUL = T_max − t" → (3) "Min-Max Scaling fitted on train only → sensors ∈ [0,1]" → (4) "30-cycle trailing mean (noise reduction)" → (5) "22-dim state vector: [21 smoothed sensors | cycle count]". Each box a different accent colour. Right side: a small annotated time-series plot showing noisy raw vs smooth windowed signal. White background, clean infographic.
@@ -358,7 +358,7 @@ Why three terms?
   embedded in the world model. No hardcoded heuristics needed.
 
 Why residual for state?
-  Sensor channels:   Δs ~ 0.01  (tiny normalised changes)
+  Sensor channels:   Δs ~ 0.01  (tiny normalized changes)
   Cycle count:       Δt = +1    (exactly one per step)
   Residual prediction equalises gradient contribution across
   all 16 state dimensions; absolute prediction gives cycle
@@ -368,7 +368,7 @@ Architecture:  Linear(18,256) → ReLU → Linear(256,256) → ReLU → Linear(2
 ```
 
 ### Speaker Notes
-"This is one of the more subtle mathematical decisions in the project. The state vector mixes normalised sensors bounded in [0,1] with a raw cycle count that can reach 300+. If the world model predicted the absolute next state, the loss gradient for the cycle term would be 10,000 times larger than for any individual sensor. The world model would learn to predict the cycle perfectly and completely ignore sensor degradation — which is exactly the wrong behaviour. Predicting the residual instead equalises the gradients."
+"This is one of the more subtle mathematical decisions in the project. The state vector mixes normalized sensors bounded in [0,1] with a raw cycle count that can reach 300+. If the world model predicted the absolute next state, the loss gradient for the cycle term would be 10,000 times larger than for any individual sensor. The world model would learn to predict the cycle perfectly and completely ignore sensor degradation — which is exactly the wrong behaviour. Predicting the residual instead equalises the gradients."
 
 ### AI Slide Prompt
 > Mathematical deep-dive slide titled "World Model: Why Residual Prediction?". Left side: a side-by-side diagram of two model variants — top "Absolute: predict s'" with a red cross showing cycle dominates, bottom "Residual: predict Δs = s' − s" with a green check showing balanced gradients. Right side: a bar chart with 22 bars — 21 short bars for sensor channels (~0.01 scale) and one tall bar for cycle count (+1.0), labelled "Scale mismatch = 10,000×". Centre equation box: ŝ' = s + f_φ(s, a). White background, mathematical but visual.
@@ -447,7 +447,7 @@ Three metrics quantify real-world operational performance:
 1. TOTAL COST OF OWNERSHIP (TCO)
    TCO = Σ_engines  C_m · 𝟙[maintained] + C_f · 𝟙[failed]
    C_m = 20,  C_f = 100
-   Normalised: cost per 1,000 operational cycles
+   Normalized: cost per 1,000 operational cycles
 
 2. FALSE DISCOVERY RATE (FDR)
    FDR = FP / (TP + FP)

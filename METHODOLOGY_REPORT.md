@@ -16,7 +16,7 @@ This problem is formulated as a **Markov Decision Process** (MDP) $\mathcal{M} =
 
 | Component | Definition |
 |---|---|
-| $\mathcal{S}$ | Continuous state space $\mathbb{R}^{16}$ (15 normalised active sensors + cycle count) |
+| $\mathcal{S}$ | Continuous state space $\mathbb{R}^{16}$ (15 normalized active sensors + cycle count) |
 | $\mathcal{A}$ | Discrete action space $\{0 : \text{Continue},\ 1 : \text{Maintain}\}$ |
 | $\mathcal{P}$ | Unknown transition dynamics (learned by the Dyna-Q world model) |
 | $\mathcal{R}$ | Economic cost-benefit reward with proximity shaping (defined below) |
@@ -58,7 +58,7 @@ $$s_t = \left[\bar{x}^{(u)}_{t,1},\ \bar{x}^{(u)}_{t,2},\ \ldots,\ \bar{x}^{(u)}
 
 ### 2.3 Feature Scaling
 
-All 15 active sensor channels are normalised via **Min-Max Scaling** fitted exclusively on the training split, preventing data leakage into evaluation:
+All 15 active sensor channels are normalized via **Min-Max Scaling** fitted exclusively on the training split, preventing data leakage into evaluation:
 
 $$\tilde{x}_{i} = \frac{x_{i} - x_{i}^{\min}}{x_{i}^{\max} - x_{i}^{\min}}, \qquad \tilde{x}_i \in [0,\ 1]$$
 
@@ -259,7 +259,7 @@ Two deterministic baselines are evaluated alongside the trained agents:
 
 $$\mathrm{TCO}_\pi = \sum_{u=1}^{N_{\mathrm{eval}}} \left( C_m \cdot \mathbb{1}[\text{engine } u \text{ maintained}] + C_f \cdot \mathbb{1}[\text{engine } u \text{ failed}] \right)$$
 
-where $C_m = 20$ and $C_f = 100$ (training scenario defaults). The sensitivity analysis in Section 7 relaxes the fixed $C_f$ assumption. The normalised metric **cost per 1,000 operational cycles** enables fair comparison across policies with different maintenance frequencies.
+where $C_m = 20$ and $C_f = 100$ (training scenario defaults). The sensitivity analysis in Section 7 relaxes the fixed $C_f$ assumption. The normalized metric **cost per 1,000 operational cycles** enables fair comparison across policies with different maintenance frequencies.
 
 ### 9.2 False Discovery Rate (FDR)
 

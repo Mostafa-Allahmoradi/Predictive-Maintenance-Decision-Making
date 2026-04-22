@@ -70,8 +70,9 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    /* Force dark background for sidebar */
-    section[data-testid="stSidebar"] { background: #0d1117; }
+    /* White background for sidebar */
+    section[data-testid="stSidebar"] { background: #ffffff; }
+    section[data-testid="stSidebar"] * { color: #000000 !important; }
 
     /* Status badge variants */
     .status-safe {
@@ -279,7 +280,7 @@ def _sensor_chart(history: dict) -> go.Figure:
         height=300,
         title=dict(text="Live Sensor Feed  (last 60 cycles)", x=0, font=dict(size=14)),
         xaxis=dict(gridcolor="#21262d", title="Cycle"),
-        yaxis=dict(gridcolor="#21262d", title="Normalised value", range=[-0.05, 1.08]),
+        yaxis=dict(gridcolor="#21262d", title="Normalized value", range=[-0.05, 1.08]),
         legend=dict(orientation="h", y=-0.3, font=dict(size=11)),
     )
     return fig
@@ -388,7 +389,6 @@ def _rul_gauge(rul_actual: int, max_rul: int) -> go.Figure:
     fig.update_layout(
         **_CHART_LAYOUT,
         height=260,
-        margin=dict(l=10, r=10, t=40, b=10),
     )
     return fig
 
@@ -532,11 +532,11 @@ with st.sidebar:
 
     btn_col1, btn_col2, btn_col3 = st.columns(3)
     with btn_col1:
-        play_btn = st.button("▶ Play", use_container_width=True)
+        play_btn = st.button("▶ Play", width="stretch")
     with btn_col2:
-        pause_btn = st.button("⏸ Pause", use_container_width=True)
+        pause_btn = st.button("⏸ Pause", width="stretch")
     with btn_col3:
-        reset_btn = st.button("↺ Reset", use_container_width=True)
+        reset_btn = st.button("↺ Reset", width="stretch")
 
     st.markdown("---")
 
@@ -667,7 +667,7 @@ r1_left, r1_right = st.columns([2, 1])
 
 with r1_left:
     if h["cycle"]:
-        st.plotly_chart(_sensor_chart(h), use_container_width=True, key="sensor_chart")
+        st.plotly_chart(_sensor_chart(h), width="stretch", key="sensor_chart")
     else:
         st.info("▶ Press **Play** in the sidebar to start the simulation.")
 
@@ -675,7 +675,7 @@ with r1_right:
     if selected_policy in ("Double DQN", "Dyna-Q"):
         st.plotly_chart(
             _qvalue_chart(cur_qs, cur_qm, selected_policy),
-            use_container_width=True,
+            width="stretch",
             key="q_chart",
         )
         if active_agent is None:
@@ -700,7 +700,7 @@ with r1_right:
     elif selected_policy == "Fixed-Interval":
         st.plotly_chart(
             _fi_coverage_chart(cur_cycle, fixed_interval),
-            use_container_width=True,
+            width="stretch",
             key="fi_chart",
         )
         cycles_left = max(0, fixed_interval - cur_cycle)
@@ -713,7 +713,7 @@ with r1_right:
 r2_left, r2_right = st.columns([1, 1])
 
 with r2_left:
-    st.plotly_chart(_rul_gauge(cur_rul, max_rul), use_container_width=True, key="rul_gauge")
+    st.plotly_chart(_rul_gauge(cur_rul, max_rul), width="stretch", key="rul_gauge")
     # Predicted RUL: simple linear extrapolation from current cycle
     _predicted_rul = max(0, max_rul - (cur_cycle - int(round(float(ss.episode.states[0][-1])))))
     _delta = _predicted_rul - cur_rul
@@ -722,7 +722,7 @@ with r2_left:
 
 with r2_right:
     if h["reward"]:
-        st.plotly_chart(_cumulative_cost_chart(h), use_container_width=True, key="cost_chart")
+        st.plotly_chart(_cumulative_cost_chart(h), width="stretch", key="cost_chart")
 
         # Running cost breakdown
         n_maint = h["event"].count("scheduled_maintenance")
